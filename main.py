@@ -9,7 +9,7 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 genai.configure(api_key=GEMINI_KEY)
 
-# Top Indian Stocks to scan automatically
+# Top Indian Stocks
 STOCKS_TO_WATCH = ["SBIN.NS", "TATAMOTORS.NS", "RELIANCE.NS", "ITC.NS", "HDFCBANK.NS", "INFY.NS"]
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -19,31 +19,37 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def check_market(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Dhorjo dhoro Manik, ami market scan korchi... Ete 10-15 second somoy lagte pare.")
+    await update.message.reply_text("Dhorjo dhoro Manik, ami live market scan korchi...")
     
     recommendations = []
     
     for symbol in STOCKS_TO_WATCH:
         try:
-            stock = yf.Ticker(symbol)
-            df = stock.history(period="5d", interval="1h")
-            if df.empty: continue
+            # Data fetch optimization
+            stock = yf.download(symbol, period="5d", interval="1h", progress=False)
+            if stock.empty:
+                continue
             
-            price = df['Close'].iloc[-1]
+            price = float(stock['Close'].iloc[-1])
             
-            # AI logic for each stock
+            # AI Decision Logic
             model = genai.GenerativeModel('gemini-pro')
             prompt = (f"Stock: {symbol}, Current Price: {price}. User wants to invest 1000 INR for 50-100 profit. "
-                      f"If this stock looks good to buy today, give clear Target and Stoploss in Bengali. "
-                      f"If not good, say 'Wait'. Keep it very simple for a beginner.")
+                      f"Give clear advice: Buy (if good) or Wait (if bad). "
+                      f"If Buy, give Target and Stoploss in simple Bengali. Keep it very short.")
             
             response = model.generate_content(prompt)
-            recommendations.append(f"📊 *Stock: {symbol}*\n💰 Price: ₹{price:.2f}\n🤖 Advice: {response.text}\n")
-        except:
+            recommendations.append(f"📊 *Stock: {symbol}*\n💰 Current Price: ₹{price:.2f}\n🤖 AI Advice: {response.text}\n")
+        except Exception as e:
+            print(f"Error for {symbol}: {e}")
             continue
 
-    final_msg = "\n---\n".join(recommendations) if recommendations else "Market data ekhon pawa jachhe na. Pore chesta koro."
-    await update.message.reply_text(f"🚀 *Aajker Prediction:*\n\n{final_msg}", parse_mode='Markdown')
+    if recommendations:
+        final_msg = "\n---\n".join(recommendations)
+        await update.message.reply_text(f"🚀 *Aajker Prediction:*\n\n{final_msg}", parse_mode='Markdown')
+    else:
+        # Jodi asholei data na pay, tokhon ei message asbe
+        await update.message.reply_text("Market data fetch korte somoshya hochhe. Ektu pore /check command-ta abar dao.")
 
 def main():
     app = Application.builder().token(TELEGRAM_TOKEN).build()
