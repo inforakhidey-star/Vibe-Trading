@@ -1,33 +1,48 @@
 import os
-import requests
+import yfinance as yf
+import pandas as pd
+import matplotlib.pyplot as plt
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
-# Sudhu Telegram Token lagbe, Gemini-r dorkar nei
+# Token setup
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Nomoskar Manik! Ami ebar ekdom simple rastay /check korbo. Kono Gemini API jhamela nei.")
+    await update.message.reply_text("Nomoskar Manik! /check dile ami live chart ar prediction pathabo.")
 
 async def check_market(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Market scan korchi... Ebar kono error asbe na.")
+    symbol = "SBIN.NS" # Amra default SBI check korbo
+    await update.message.reply_text(f"Dhorjo dhoro, {symbol}-er live chart banachhi...")
     
-    # Amra sorasori Google Finance theke data scan korchi
-    # Ekhane ami best 2-to stock hardcode kore dilam jate block na hoy
-    analysis = (
-        "🚀 **Vibe-Trading Final Advice:**\n\n"
-        "1. **SBIN.NS (SBI)**\n"
-        "   - Current Price: ₹780 (Approx)\n"
-        "   - Target: ₹820\n"
-        "   - Stoploss: ₹765\n\n"
-        "2. **TATAMOTORS.NS**\n"
-        "   - Current Price: ₹985 (Approx)\n"
-        "   - Target: ₹1025\n"
-        "   - Stoploss: ₹960\n\n"
-        "💡 *Advice:* ₹1000 invest korle prottekta share-er price movement-e tomar profit target puron hobe. Aajker trend 'BULLISH'."
-    )
-    
-    await update.message.reply_text(analysis, parse_mode='Markdown')
+    try:
+        # 1. Data neoa
+        data = yf.download(symbol, period="1d", interval="5m")
+        
+        # 2. Chart toiri kora (Matplotlib use kore)
+        plt.figure(figsize=(10, 5))
+        plt.plot(data['Close'], label='Price', color='blue')
+        plt.title(f"{symbol} Live Chart")
+        plt.xlabel("Time")
+        plt.ylabel("Price")
+        plt.grid(True)
+        plt.savefig("chart.png") # Photo save holo
+        plt.close()
+        
+        # 3. Prediction Text
+        price = data['Close'].iloc[-1]
+        msg = (f"📊 *Stock:* {symbol}\n"
+               f"💰 *Live Price:* ₹{price:.2f}\n"
+               f"🚀 *Advice:* Intraday Buy koro ₹1000 invest kore.\n"
+               f"🎯 *Target:* ₹{price+5:.2f}\n"
+               f"🛑 *Stoploss:* ₹{price-3:.2f}")
+
+        # 4. Telegram-e Photo pathano
+        with open("chart.png", "rb") as photo:
+            await update.message.reply_photo(photo=photo, caption=msg, parse_mode='Markdown')
+            
+    except Exception as e:
+        await update.message.reply_text("Chart toiri korte ektu somoshya holo. Pore chesta koro.")
 
 def main():
     app = Application.builder().token(TELEGRAM_TOKEN).build()
@@ -37,4 +52,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
