@@ -1,6 +1,5 @@
 import os
-import time
-import yfinance as yf
+import requests
 import google.generativeai as genai
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
@@ -8,49 +7,46 @@ from telegram.ext import Application, CommandHandler, ContextTypes
 # API Keys setup
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 GEMINI_KEY = os.getenv("GEMINI_API_KEY")
+ALPHA_KEY = os.getenv("ALPHA_VANTAGE_KEY")
+
 genai.configure(api_key=GEMINI_KEY)
 
-# Ami list-ta ektu choto korlam jate block na hoy
-STOCKS_TO_WATCH = ["^NSEI", "SBIN.NS", "TATAMOTORS.NS", "RELIANCE.NS"]
+# Top Indian Stocks (Alpha Vantage formatting)
+STOCKS = {"SBIN": "BSE:SBIN", "TATA": "BSE:TATAMOTORS", "RELIANCE": "BSE:RELIANCE"}
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Nomoskar Manik! /check command dile ami Nifty ar top stocks scan korbo.")
+    await update.message.reply_text("Nomoskar Manik! Alpha Vantage API ready. /check dile ami scan korbo.")
 
 async def check_market(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Market scan korchi... Please 20-30 second dhorjo dhoro.")
+    await update.message.reply_text("Market data fetch korchi Alpha Vantage theke...")
     
     recommendations = []
     
-    for symbol in STOCKS_TO_WATCH:
+    for name, symbol in STOCKS.items():
         try:
-            # Code-ke ektu thamabo jate Yahoo block na kore
-            time.sleep(2) 
+            # Alpha Vantage API URL
+            url = f'https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={symbol}&apikey={ALPHA_KEY}'
+            r = requests.get(url)
+            data = r.json()
             
-            # Data fetch kora
-            data = yf.download(symbol, period="2d", interval="1h", progress=False)
+            # Extract price from JSON
+            price = data.get("Global Quote", {}).get("05. price")
             
-            if not data.empty:
-                # Latest price ber kora
-                price = float(data['Close'].iloc[-1])
-                name = "NIFTY 50" if symbol == "^NSEI" else symbol
-                
-                # Gemini AI Analysis
+            if price:
                 model = genai.GenerativeModel('gemini-pro')
-                prompt = (f"Market Item: {name}, Current Price: {price}. User wants to invest 1000 INR for 50-100 profit. "
-                          f"Give simple Bengali advice: Buy/Wait with Target/Stoploss. Focus on safety.")
+                prompt = (f"Stock: {name}, Price: {price}. User wants 50-100 profit on 1000 investment. "
+                          f"Give simple Bengali advice: Buy/Wait with Target/Stoploss.")
                 
                 response = model.generate_content(prompt)
-                recommendations.append(f"📌 *{name}*\n💰 Price: ₹{price:.2f}\n💡 Advice: {response.text}")
+                recommendations.append(f"📌 *{name}*\n💰 Price: ₹{float(price):.2f}\n💡 Advice: {response.text}")
             
         except Exception as e:
-            print(f"Error fetching {symbol}: {e}")
             continue
 
     if recommendations:
-        final_msg = "\n\n---\n\n".join(recommendations)
-        await update.message.reply_text(f"🚀 *Market Analysis:*\n\n{final_msg}", parse_mode='Markdown')
+        await update.message.reply_text("\n\n---\n\n".join(recommendations), parse_mode='Markdown')
     else:
-        await update.message.reply_text("Yahoo Finance ekhon data block korche. 10 minute pore abar try koro.")
+        await update.message.reply_text("Alpha Vantage thekeo data pawa jachhe na. API limit check koro.")
 
 def main():
     app = Application.builder().token(TELEGRAM_TOKEN).build()
