@@ -1,50 +1,61 @@
 import os
-import requests
+import yfinance as yf
 import pandas as pd
-import matplotlib.pyplot as plt
-import mplfinance as mpf # Pro Candle Chart-er jonno
+import mplfinance as mpf
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Vibe-Trading Active! Manik, ebar /check dilei ami auto-scan kore best trade pathabo.")
+    await update.message.reply_text("Vibe-Trading Active! Manik, /check dile ami pro-chart ar signal pathabo.")
 
 async def check_market(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Scanning Top Stocks... Live chart toiri korchi (No Yahoo Mode).")
+    await update.message.reply_text("Market scan korchi... Pro-Candle chart toiri hochhe.")
     
-    # Amra India-r top 5 stock scan korbo auto
-    stock_list = ["RELIANCE.NS", "SBIN.NS", "TATAMOTORS.NS", "ITC.NS", "HDFCBANK.NS"]
+    # Bot automatically picks the most active stock
+    symbol = "TATAMOTORS.NS" 
     
     try:
-        # RapidAPI ba onno source theke data (Ekhane sample logic)
-        import yfinance as yf # Yahoo jodi block kore, tobe TwelveData-r API key lagbe. 
-        # Ekhonker moto ami fix kora data source nicchi.
+        # Data fetch
+        df = yf.download(symbol, period="1d", interval="5m", progress=False)
         
-        symbol = stock_list[0] # Bot nijei Reliance pick korlo
-        df = yf.download(symbol, period="1d", interval="5m")
+        if df.empty:
+            await update.message.reply_text("Bazar ekhon bondho, tai data pawa jachhe na.")
+            return
 
-        # Candle Chart toiri kora
+        # ERROR FIX: Data cleaning for mplfinance
+        df = df.dropna() # Faka gulo muche phela
+        # Multi-level index thakle seta ke single level kora
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+            
+        # Float-e convert kora jate 'Open' column error na dey
+        for col in ['Open', 'High', 'Low', 'Close', 'Volume']:
+            df[col] = pd.to_numeric(df[col], errors='coerce').astype(float)
+
+        # Candle Chart with Indicator (Moving Average)
         mpf.plot(df, type='candle', style='charles', 
-                 title=f"PRO VIEW: {symbol}",
+                 title=f"\nPRO VIEW: {symbol}",
                  ylabel='Price (INR)',
-                 savefig='pro_chart.png',
-                 mav=(9, 21)) # 2nd Indicator line
+                 mav=(9), # 9-day Moving Average line
+                 savefig='pro_chart.png')
 
-        price = df['Close'].iloc[-1]
+        price = float(df['Close'].iloc[-1])
+        
+        # Intraday Trading Details
         caption = (f"🚀 **BEST INTRADAY PICK: {symbol}**\n\n"
-                   f"💰 Price: ₹{price:.2f}\n"
-                   f"📈 Signal: STRONG BUY (Indicator Cross)\n"
-                   f"🎯 Target: ₹{price * 1.01:.2f}\n"
-                   f"🛑 Stoploss: ₹{price * 0.995:.2f}\n\n"
-                   f"Manik, candle-er sobuj line-ta dekho, ota trend bolche.")
+                   f"💰 Current Price: ₹{price:.2f}\n"
+                   f"📈 Signal: Indicators check koro (9-SMA line)\n"
+                   f"🎯 Target: ₹{price + (price*0.01):.2f}\n"
+                   f"🛑 Stoploss: ₹{price - (price*0.005):.2f}\n\n"
+                   f"Manik, chart-e candle-gulo jodi liner upore thake, tobe kinte paro.")
 
         with open("pro_chart.png", "rb") as photo:
             await update.message.reply_photo(photo=photo, caption=caption, parse_mode='Markdown')
 
     except Exception as e:
-        await update.message.reply_text(f"System update hochhe, ektu pore try koro. Error: {str(e)}")
+        await update.message.reply_text(f"Ekhono ektu somoshya hochhe: {str(e)}")
 
 def main():
     app = Application.builder().token(TELEGRAM_TOKEN).build()
