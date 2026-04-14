@@ -13,4 +13,4 @@ jobs:
         run: |
           pip install python-telegram-bot yfinance google-generativeai pandas
           python main.py
-          
+        
