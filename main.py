@@ -1,63 +1,58 @@
 import os
-import requests
+import yfinance as yf
 import pandas as pd
 import mplfinance as mpf
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
-# API Keys
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-API_KEY = os.getenv("TWELVE_DATA_KEY")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Vibe-Trading Active! Manik, ebar /check dilei ami pro-chart pathabo.")
+    await update.message.reply_text("Vibe-Trading Active! Manik, /check dile ami pro-chart ar signal pathabo.")
 
 async def check_market(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Twelve Data theke market scan korchi... Chart toiri hochhe.")
+    await update.message.reply_text("Market scan kore chart toiri hochhe... Ektu dhorjo dhoro.")
     
-    # Bot top Indian stock auto pick korbe (Reliance sample)
-    symbol = "RELIANCE:NSE" 
+    # Bot auto picks the best intraday stock
+    symbol = "TATAMOTORS.NS" 
     
     try:
-        # API theke data neoa
-        url = f"https://api.twelvedata.com/time_series?symbol={symbol}&interval=5min&outputsize=50&apikey={API_KEY}"
-        response = requests.get(url).json()
+        # Data fetch using a more stable period
+        df = yf.download(symbol, period="5d", interval="60m", progress=False)
         
-        if "values" not in response:
-            await update.message.reply_text("API Limit ba connection error. Twelve Data key thik achhe to?")
+        if df.empty:
+            await update.message.reply_text("Market data ekhon pawa jachhe na. Pore try koro.")
             return
 
-        # Data-ke table format-e ana
-        df = pd.DataFrame(response["values"])
-        df['datetime'] = pd.to_datetime(df['datetime'])
-        df = df.set_index('datetime')
-        for col in ['open', 'high', 'low', 'close', 'volume']:
-            df[col] = df[col].astype(float)
-        
-        # Column name thik kora mplfinance-er jonno
-        df.columns = ['Open', 'High', 'Low', 'Close', 'Volume']
-        df = df.iloc[::-1] # Purono theke notun-e sajano
+        # Data Cleaning for Candle Chart
+        df = df.dropna()
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+            
+        for col in ['Open', 'High', 'Low', 'Close', 'Volume']:
+            df[col] = pd.to_numeric(df[col], errors='coerce').astype(float)
 
-        # Candlestick Chart with Moving Average
+        # Pro Candlestick Chart with 9-period SMA
         mpf.plot(df, type='candle', style='charles', 
-                 title=f"PRO VIEW: {symbol}",
+                 title=f"\nPRO VIEW: {symbol}",
                  ylabel='Price (INR)',
                  mav=(9), 
                  savefig='pro_chart.png')
 
-        price = df['Close'].iloc[-1]
+        price = float(df['Close'].iloc[-1])
+        
         caption = (f"🚀 **INTRADAY PICK: {symbol}**\n\n"
                    f"💰 Price: ₹{price:.2f}\n"
-                   f"📈 Signal: RSI & MA Check koro (Lal-Sobuj Candle)\n"
-                   f"🎯 Target: ₹{price * 1.01:.2f}\n"
-                   f"🛑 Stoploss: ₹{price * 0.995:.2f}\n\n"
-                   f"Manik, chart-er bheti-te SMA line-ta track koro.")
+                   f"📊 Indicator: Chart-er 'SMA Line' check koro.\n"
+                   f"🎯 Target: ₹{price + (price*0.01):.2f}\n"
+                   f"🛑 Stoploss: ₹{price - (price*0.005):.2f}\n\n"
+                   f"Manik, lal candle asle wait koro, sobuj bati (candle) asle profit target set koro.")
 
         with open("pro_chart.png", "rb") as photo:
             await update.message.reply_photo(photo=photo, caption=caption, parse_mode='Markdown')
 
     except Exception as e:
-        await update.message.reply_text(f"System Error: {str(e)}")
+        await update.message.reply_text(f"Error: {str(e)}")
 
 def main():
     app = Application.builder().token(TELEGRAM_TOKEN).build()
