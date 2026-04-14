@@ -3,50 +3,51 @@ import google.generativeai as genai
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
-# API Keys
+# API Keys setup
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 
-# Gemini Setup
+# Gemini Setup - Version specify kore deya holo
 genai.configure(api_key=GEMINI_KEY)
-
-# Top Indian Stocks List for the Agent to Analyze
-STOCKS_TO_SCAN = "Reliance, SBI, Tata Motors, ITC, HDFC Bank, Infosys"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "Nomoskar Manik! Ami Vibe-Trading Agent.\n\n"
-        "Tumi /check command-ta dao, ami market analysis kore best 2-to trade tomake bolbo."
+        "Tumi sudhu /check command-ta dao, ami market analysis kore best 2-to trade bolbo."
     )
 
 async def check_market(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Dhorjo dhoro Manik, Vibe-Trading Agent market scan korche...")
+    await update.message.reply_text("Vibe-Trading Agent market scan korche... Ektu dhorjo dhoro.")
     
     try:
-        # We use 'gemini-pro' which is the most stable version
-        model = genai.GenerativeModel('gemini-pro')
+        # Latest Stable Model: gemini-1.5-flash
+        model = genai.GenerativeModel('gemini-1.5-flash')
         
-        # This prompt tells the agent exactly what to do
-        prompt = f"""
-        You are a professional Vibe-Trading Agent for the Indian Stock Market.
-        Based on the current market sentiment for these stocks: {STOCKS_TO_SCAN}.
-        Give me exactly 2 high-probability trades for a beginner with 1000 INR budget.
-        For each trade, provide:
+        prompt = """
+        You are a professional Vibe-Trading Agent. 
+        Scan the Indian stock market sentiment right now.
+        Pick exactly 2 stocks for a 1000 INR investment with 50-100 INR profit target.
+        Give the output in this format in Bengali:
         1. Stock Name (NSE Symbol)
-        2. Buy Price (Approx)
-        3. Target Price (for 50-100 profit)
-        4. Stoploss (for safety)
-        
-        Rules: Give clear advice in simple Bengali. Use bullet points.
+        2. Current Price (Approx)
+        3. Target & Stoploss
+        4. Why this stock? (Reason)
+        Keep it simple for a beginner.
         """
         
         response = model.generate_content(prompt)
         
-        final_msg = f"🚀 **Vibe-Trading Agent's Top Picks:**\n\n{response.text}"
+        final_msg = f"🚀 **Vibe-Trading Agent's Picks:**\n\n{response.text}"
         await update.message.reply_text(final_msg, parse_mode='Markdown')
         
     except Exception as e:
-        await update.message.reply_text(f"Kothao vul hoyeche! Error: {str(e)}")
+        # Jodi 1.5-flash o na pay, tobe gemini-1.0-pro try korbe automatically
+        try:
+            model = genai.GenerativeModel('gemini-1.0-pro')
+            response = model.generate_content(prompt)
+            await update.message.reply_text(f"🚀 **Vibe-Trading Agent's Picks:**\n\n{response.text}", parse_mode='Markdown')
+        except Exception as e2:
+            await update.message.reply_text(f"Error: {str(e2)}. API settings-e somoshya achhe.")
 
 def main():
     app = Application.builder().token(TELEGRAM_TOKEN).build()
