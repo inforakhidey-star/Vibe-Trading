@@ -1,4 +1,5 @@
 import os
+import time
 import yfinance as yf
 import google.generativeai as genai
 from telegram import Update
@@ -9,47 +10,47 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 genai.configure(api_key=GEMINI_KEY)
 
-# Top Indian Stocks
-STOCKS_TO_WATCH = ["SBIN.NS", "TATAMOTORS.NS", "RELIANCE.NS", "ITC.NS", "HDFCBANK.NS", "INFY.NS"]
+# Ami list-ta ektu choto korlam jate block na hoy
+STOCKS_TO_WATCH = ["^NSEI", "SBIN.NS", "TATAMOTORS.NS", "RELIANCE.NS"]
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "Nomoskar Manik! Trading-e zero knowledge thakleo chinta nei.\n\n"
-        "Tumi sudhu /check command-ta dao, ami top Indian stocks scan kore ₹1000 investment-er jonno bhalo option khunje debo."
-    )
+    await update.message.reply_text("Nomoskar Manik! /check command dile ami Nifty ar top stocks scan korbo.")
 
 async def check_market(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Dhorjo dhoro Manik, ami live market scan korchi...")
+    await update.message.reply_text("Market scan korchi... Please 20-30 second dhorjo dhoro.")
     
     recommendations = []
     
     for symbol in STOCKS_TO_WATCH:
         try:
-            # Data fetch optimization
-            stock = yf.download(symbol, period="5d", interval="1h", progress=False)
-            if stock.empty:
-                continue
+            # Code-ke ektu thamabo jate Yahoo block na kore
+            time.sleep(2) 
             
-            price = float(stock['Close'].iloc[-1])
+            # Data fetch kora
+            data = yf.download(symbol, period="2d", interval="1h", progress=False)
             
-            # AI Decision Logic
-            model = genai.GenerativeModel('gemini-pro')
-            prompt = (f"Stock: {symbol}, Current Price: {price}. User wants to invest 1000 INR for 50-100 profit. "
-                      f"Give clear advice: Buy (if good) or Wait (if bad). "
-                      f"If Buy, give Target and Stoploss in simple Bengali. Keep it very short.")
+            if not data.empty:
+                # Latest price ber kora
+                price = float(data['Close'].iloc[-1])
+                name = "NIFTY 50" if symbol == "^NSEI" else symbol
+                
+                # Gemini AI Analysis
+                model = genai.GenerativeModel('gemini-pro')
+                prompt = (f"Market Item: {name}, Current Price: {price}. User wants to invest 1000 INR for 50-100 profit. "
+                          f"Give simple Bengali advice: Buy/Wait with Target/Stoploss. Focus on safety.")
+                
+                response = model.generate_content(prompt)
+                recommendations.append(f"📌 *{name}*\n💰 Price: ₹{price:.2f}\n💡 Advice: {response.text}")
             
-            response = model.generate_content(prompt)
-            recommendations.append(f"📊 *Stock: {symbol}*\n💰 Current Price: ₹{price:.2f}\n🤖 AI Advice: {response.text}\n")
         except Exception as e:
-            print(f"Error for {symbol}: {e}")
+            print(f"Error fetching {symbol}: {e}")
             continue
 
     if recommendations:
-        final_msg = "\n---\n".join(recommendations)
-        await update.message.reply_text(f"🚀 *Aajker Prediction:*\n\n{final_msg}", parse_mode='Markdown')
+        final_msg = "\n\n---\n\n".join(recommendations)
+        await update.message.reply_text(f"🚀 *Market Analysis:*\n\n{final_msg}", parse_mode='Markdown')
     else:
-        # Jodi asholei data na pay, tokhon ei message asbe
-        await update.message.reply_text("Market data fetch korte somoshya hochhe. Ektu pore /check command-ta abar dao.")
+        await update.message.reply_text("Yahoo Finance ekhon data block korche. 10 minute pore abar try koro.")
 
 def main():
     app = Application.builder().token(TELEGRAM_TOKEN).build()
