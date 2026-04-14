@@ -4,49 +4,41 @@ import google.generativeai as genai
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
-# API Keys setup
+# API Keys
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 GEMINI_KEY = os.getenv("GEMINI_API_KEY")
-ALPHA_KEY = os.getenv("ALPHA_VANTAGE_KEY")
-
 genai.configure(api_key=GEMINI_KEY)
 
-# Top Indian Stocks (Alpha Vantage formatting)
-STOCKS = {"SBIN": "BSE:SBIN", "TATA": "BSE:TATAMOTORS", "RELIANCE": "BSE:RELIANCE"}
+# Top Stocks List
+STOCKS = ["RELIANCE", "SBIN", "TATAMOTORS", "ITC", "HDFCBANK", "INFY"]
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Nomoskar Manik! Alpha Vantage API ready. /check dile ami scan korbo.")
+    await update.message.reply_text("Nomoskar Manik! Ami Vibe-Trading Agent. /top2 trade jante /check likho.")
 
 async def check_market(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Market data fetch korchi Alpha Vantage theke...")
+    await update.message.reply_text("Market scan korchi... Ami sudhu best 2-to trade khunje ber korbo.")
     
-    recommendations = []
+    # Ekhane amra agent-er moto bhabchi
+    prompt = f"""
+    Act as a Vibe-Trading Agent. I will give you a list of Indian stocks: {STOCKS}.
+    Search for their current live price and market trend (Bullish/Bearish).
+    Give me ONLY the top 2 best stocks where I can invest 1000 INR to get 50-100 profit.
+    Format your answer like this:
+    1. Stock Name
+    2. Buy Price
+    3. Target (Profit)
+    4. Stoploss (Safety)
+    Language: Simple Bengali.
+    """
     
-    for name, symbol in STOCKS.items():
-        try:
-            # Alpha Vantage API URL
-            url = f'https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={symbol}&apikey={ALPHA_KEY}'
-            r = requests.get(url)
-            data = r.json()
-            
-            # Extract price from JSON
-            price = data.get("Global Quote", {}).get("05. price")
-            
-            if price:
-                model = genai.GenerativeModel('gemini-pro')
-                prompt = (f"Stock: {name}, Price: {price}. User wants 50-100 profit on 1000 investment. "
-                          f"Give simple Bengali advice: Buy/Wait with Target/Stoploss.")
-                
-                response = model.generate_content(prompt)
-                recommendations.append(f"📌 *{name}*\n💰 Price: ₹{float(price):.2f}\n💡 Advice: {response.text}")
-            
-        except Exception as e:
-            continue
-
-    if recommendations:
-        await update.message.reply_text("\n\n---\n\n".join(recommendations), parse_mode='Markdown')
-    else:
-        await update.message.reply_text("Alpha Vantage thekeo data pawa jachhe na. API limit check koro.")
+    try:
+        model = genai.GenerativeModel('gemini-1.5-flash') # Latest model
+        response = model.generate_content(prompt)
+        
+        final_msg = f"🚀 **Vibe-Trading Agent Analysis:**\n\n{response.text}"
+        await update.message.reply_text(final_msg, parse_mode='Markdown')
+    except Exception as e:
+        await update.message.reply_text(f"Error: {str(e)}")
 
 def main():
     app = Application.builder().token(TELEGRAM_TOKEN).build()
